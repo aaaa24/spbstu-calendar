@@ -3,6 +3,7 @@ import os
 import dotenv
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
+import requests
 
 dotenv.load_dotenv()
 
@@ -18,6 +19,19 @@ class GoogleCalendar:
 
     def insert_event(self, event):
         self.service.events().insert(calendarId=self.calendar_id, body=event).execute()
+
+
+class Schedule:
+    BASE_URL = 'https://ruz.spbstu.ru/api/v1/ruz/scheduler'
+
+    def __init__(self, schedule_id):
+        self.schedule_id = schedule_id
+
+    def get_week_schedule(self, date=None):
+        url = f'{self.BASE_URL}/{self.schedule_id}'
+        response = requests.get(url, params={'date': date})
+        response.raise_for_status()
+        return response.json()
 
 
 def main():
