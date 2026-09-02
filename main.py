@@ -19,6 +19,7 @@ class GoogleCalendar:
         self.calendar_id = calendar_id
 
     def insert_event(self, event):
+        print(event)
         self.service.events().insert(calendarId=self.calendar_id, body=event).execute()
 
 
@@ -45,10 +46,7 @@ class Schedule:
     @staticmethod
     def create_iso8601(date_str, time_str):
         dt_local = datetime.strptime(f'{date_str} {time_str}', '%Y-%m-%d %H:%M')
-        utc3 = timezone(timedelta(hours=3))
-        dt_local = dt_local.replace(tzinfo=utc3)
-        dt_utc = dt_local.astimezone(timezone.utc)
-        result = dt_utc.strftime('%Y%m%dT%H%M%S') + 'Z'
+        result = dt_local.strftime('%Y-%m-%dT%H:%M:%S') + '+03:00'
         return result
 
     @staticmethod
@@ -91,6 +89,12 @@ class Schedule:
         return events
 
 
+def insert_event(calendar, schedule):
+    week_schedule = schedule.get_week_schedule()
+    event = schedule.create_events_from_week_schedule(week_schedule)[0]
+    calendar.insert_event(event)
+
+
 def main():
     file_path = os.getenv('CREDENTIALS_FILEPATH')
     if file_path is None:
@@ -103,6 +107,14 @@ def main():
         raise ValueError('Calendar ID not provided')
 
     calendar = GoogleCalendar(credentials_filename=file_path, calendar_id=calendar_id)
+
+    schedule_id = os.getenv('SCHEDULE_ID')
+    if schedule_id is None:
+        raise ValueError('Schedule ID not provided')
+
+    schedule = Schedule(schedule_id=schedule_id)
+
+    insert_event(calendar, schedule)
 
 if __name__ == '__main__':
     main()
