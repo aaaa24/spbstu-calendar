@@ -1,9 +1,10 @@
 import os
+from datetime import timedelta, timezone, datetime
 
 import dotenv
+import requests
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
-import requests
 
 dotenv.load_dotenv()
 
@@ -32,6 +33,54 @@ class Schedule:
         response = requests.get(url, params={'date': date})
         response.raise_for_status()
         return response.json()
+
+
+def create_iso8601(date_str, time_str):
+    dt_local = datetime.strptime(f'{date_str} {time_str}', '%Y-%m-%d %H:%M')
+    utc3 = timezone(timedelta(hours=3))
+    dt_local = dt_local.replace(tzinfo=utc3)
+    dt_utc = dt_local.astimezone(timezone.utc)
+    result = dt_utc.strftime('%Y%m%dT%H%M%S') + 'Z'
+    return result
+
+
+def create_description(lesson):
+    rename_type_names = {
+        'Лекции': 'Лекция'
+    }
+
+    description_lines = []
+    if lesson['typeObj']:
+        description_lines.append(rename_type_names.get(lesson['typeObj']['name']) or lesson['typeObj']['name'])
+    if lesson['groups']:
+        description_lines.append(f'Группы: {', '.join(sorted([group['name'] for group in lesson['groups']]))}')
+    if lesson['teachers']:
+        description_lines.append(', '.join([teacher['full_name'] for teacher in lesson['teachers']]))
+    if lesson['lms_url']:
+        description_lines.append(f'<a href={lesson['lms_url']}>СДО</a>')
+    description = '\n'.join(description_lines)
+    return description
+
+
+def create_events_from_week_schedule(week_schedule):
+    events = []
+    for day in week_schedule['days']:
+        for lesson in day['lessons']:
+            event = {
+                'summary': lesson['subject'],
+                'description': create_description(lesson),
+                'location': ';'.join(
+                    [', '.join((auditory['building']['abbr'], auditory['name'])) for auditory in lesson['auditories']]
+                ),
+                'start': {
+                    'dateTime': create_iso8601(day['date'], lesson['time_start']),
+                },
+                'end': {
+                    'dateTime': create_iso8601(day['date'], lesson['time_end']),
+                },
+            }
+            events.append(event)
+    return events
 
 
 def main():
