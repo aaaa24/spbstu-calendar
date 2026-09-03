@@ -8,6 +8,7 @@ from googleapiclient.discovery import build
 
 dotenv.load_dotenv()
 
+
 class GoogleCalendar:
     SCOPES = ['https://www.googleapis.com/auth/calendar']
 
@@ -18,7 +19,7 @@ class GoogleCalendar:
         self.service = build('calendar', 'v3', credentials=credentials)
         self.calendar_id = calendar_id
 
-    def insert_event(self, event):
+    def add_event(self, event):
         self.service.events().insert(calendarId=self.calendar_id, body=event).execute()
 
     def get_events_list(self, *, time_min=None, time_max=None):
@@ -42,6 +43,9 @@ class GoogleCalendar:
             events.extend(response['items'])
 
         return events
+
+    def delete_event(self, event_id):
+        self.service.events().delete(calendarId=self.calendar_id, eventId=event_id).execute()
 
 
 class Schedule:
@@ -101,7 +105,8 @@ class Schedule:
                     'summary': lesson['subject'],
                     'description': Schedule.create_description(lesson),
                     'location': ';'.join(
-                        [', '.join((auditory['building']['abbr'], auditory['name'])) for auditory in lesson['auditories']]
+                        [', '.join((auditory['building']['abbr'], auditory['name'])) for auditory in
+                         lesson['auditories']]
                     ),
                     'start': {
                         'dateTime': Schedule.create_str_iso(day['date'], lesson['time_start']),
@@ -126,7 +131,12 @@ def update_calendar(calendar, schedule, weeks_count=1):
     calendar_events = calendar.get_events_list(time_min=time_min)
 
     comparison = compare_events(calendar_events, schedule_events)
-    print(comparison)
+
+    for event_id in comparison['delete']:
+        calendar.delete_event(event_id)
+
+    for event in comparison['add']:
+        calendar.add_event(event)
 
 
 def compare_events(calendar_events, schedule_events):
@@ -174,7 +184,10 @@ def main():
 
     schedule = Schedule(schedule_id=schedule_id)
 
-    update_calendar(calendar, schedule)
+    weeks_count = os.getenv('WEEKS_COUNT')
+    if weeks_count is None:
+        raise ValueError('Weeks count not provided')
+    update_calendar(calendar, schedule, int(weeks_count))
 
 
 if __name__ == '__main__':
