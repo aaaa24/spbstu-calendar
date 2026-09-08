@@ -38,7 +38,7 @@ class GoogleCalendar:
             response = self.service.events().list(
                 calendarId=self.calendar_id,
                 timeMin=time_min_str, timeMax=time_max_str,
-                pageToken=response.get['nextPageToken']
+                pageToken=response.get('nextPageToken')
             ).execute()
             events.extend(response['items'])
 
