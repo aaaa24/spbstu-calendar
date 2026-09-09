@@ -6,6 +6,7 @@ import requests
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 import yaml
+from jsonpath_ng import parse
 
 dotenv.load_dotenv()
 
@@ -120,30 +121,39 @@ class Schedule:
         return events
 
 
-class Rules:
-    def __init__(self, rules_filename):
-        with open(rules_filename, 'r', encoding='utf-8') as file:
-            self.rules = yaml.safe_load(file).get('rules', [])
+class Rule:
+    def __init__(self, rule):
+        self.name = rule.get('name')
+        self.condition = rule.get('condition')
+        self.action = rule.get('action')
 
     @staticmethod
-    def get_field(field_path, event):
-        field = event
-        for part in field_path.split('.'):
-            if field is None:
-                raise ValueError('invalid field path')
-            field = field.get(part)
-        return field
+    def get_nested_value(data, path):
+        expr = parse(path)
+        matches = expr.find(data)
+        return matches[0].value if matches else None
 
     @staticmethod
-    def check_cond(cond, event):
-        if cond is None:
+    def set_nested_value(data, path, value):
+        expr = parse(path)
+        expr.update(data, value)
+
+    def check_condition(self, event):
+        if self.condition is None:
             return True
-        field = Rules.get_field(cond['field'], event)
-        match cond['operator']:
-            case "equal":
-                return field == cond['value']
+        field = Rule.get_nested_value(event, self.condition['field'])
+        match self.condition['operator']:
+            case 'equal':
+                return field == self.condition['operator']
             case _:
                 return False
+
+    def run_action(self, event):
+        if self.action is None:
+            return
+        match self.action['type']:
+            case 'replace':
+                Rule.set_nested_value(event, self.action['target'], self.action['value'])
 
 
 def update_calendar(calendar, schedule, weeks_count=1):
