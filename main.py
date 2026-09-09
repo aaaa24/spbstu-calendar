@@ -103,6 +103,8 @@ class Schedule:
         events = []
         for day in week_schedule['days']:
             for lesson in day['lessons']:
+                lesson['date'] = day['date']
+
                 event = {
                     'summary': lesson['subject'],
                     'description': Schedule.create_description(lesson),
@@ -121,11 +123,24 @@ class Schedule:
         return events
 
 
+class Rules:
+    def __init__(self, rules_filename):
+        with open(rules_filename, 'r', encoding='utf-8') as file:
+            rules = yaml.safe_load(file).get('rules', [])
+            self.rules = []
+            for rule in rules:
+                self.rules.append(Rule(**rule))
+
+    def apply_rules(self, data):
+        for rule in self.rules:
+            rule.apply_rule(data)
+
+
 class Rule:
-    def __init__(self, rule):
-        self.name = rule.get('name')
-        self.condition = rule.get('condition')
-        self.action = rule.get('action')
+    def __init__(self, name, condition, action):
+        self.name = name
+        self.condition = condition
+        self.action = action
 
     @staticmethod
     def get_nested_value(data, path):
@@ -138,22 +153,26 @@ class Rule:
         expr = parse(path)
         expr.update(data, value)
 
-    def check_condition(self, event):
+    def check_condition(self, data):
         if self.condition is None:
             return True
-        field = Rule.get_nested_value(event, self.condition['field'])
+        field = Rule.get_nested_value(data, self.condition['field'])
         match self.condition['operator']:
             case 'equal':
                 return field == self.condition['operator']
             case _:
                 return False
 
-    def run_action(self, event):
+    def run_action(self, data):
         if self.action is None:
             return
         match self.action['type']:
-            case 'replace':
-                Rule.set_nested_value(event, self.action['target'], self.action['value'])
+            case 'set':
+                Rule.set_nested_value(data, self.action['target'], self.action['value'])
+
+    def apply_rule(self, data):
+        if self.check_condition(data):
+            self.run_action(data)
 
 
 def update_calendar(calendar, schedule, weeks_count=1):
