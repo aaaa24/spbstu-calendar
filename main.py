@@ -5,6 +5,7 @@ import dotenv
 import requests
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
+import yaml
 
 dotenv.load_dotenv()
 
@@ -117,6 +118,32 @@ class Schedule:
                 }
                 events.append(event)
         return events
+
+
+class Rules:
+    def __init__(self, rules_filename):
+        with open(rules_filename, 'r', encoding='utf-8') as file:
+            self.rules = yaml.safe_load(file).get('rules', [])
+
+    @staticmethod
+    def get_field(field_path, event):
+        field = event
+        for part in field_path.split('.'):
+            if field is None:
+                raise ValueError('invalid field path')
+            field = field.get(part)
+        return field
+
+    @staticmethod
+    def check_cond(cond, event):
+        if cond is None:
+            return True
+        field = Rules.get_field(cond['field'], event)
+        match cond['operator']:
+            case "equal":
+                return field == cond['value']
+            case _:
+                return False
 
 
 def update_calendar(calendar, schedule, weeks_count=1):
